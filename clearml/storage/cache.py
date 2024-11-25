@@ -46,8 +46,8 @@ class CacheManager(object):
             self._file_limit = max(self._file_limit, int(cache_file_limit))
             return self._file_limit
 
-        def get_local_copy(self, remote_url, force_download, skip_zero_size_check=False):
-            # type: (str, bool, bool) -> Optional[str]
+        def get_local_copy(self, remote_url, force_download, skip_zero_size_check=False, delete_old_files=True):
+            # type: (str, bool, bool, bool) -> Optional[str]
             helper = StorageHelper.get(remote_url)
 
             if helper.base_url == "file://":
@@ -67,7 +67,7 @@ class CacheManager(object):
                 return direct_access
 
             # check if we already have the file in our cache
-            cached_file, cached_size = self.get_cache_file(remote_url)
+            cached_file, cached_size = self.get_cache_file(remote_url, delete_old_files=delete_old_files)
             if cached_size is not None and not force_download:
                 CacheManager._add_remote_url(remote_url, cached_file)
                 return cached_file
@@ -156,12 +156,42 @@ class CacheManager(object):
             folder = Path(get_cache_dir() / CacheManager._storage_manager_folder / self._context)
             return folder.as_posix()
 
-        def get_cache_file(self, remote_url=None, local_filename=None):
-            # type: (Optional[str], Optional[str]) -> Tuple[str, Optional[int]]
+        def get_cache_file(self, remote_url=None, local_filename=None, delete_old_files=True):
+            # type: (Optional[str], Optional[str], bool) -> Tuple[str, Optional[int]]
             """
             :param remote_url: check if we have the remote url in our cache
             :param local_filename: if local_file is given, search for the local file/directory in the cache folder
+            :param delete_old_files: if True, delete old files in the cache folder if the cache limit is reached
             :return: full path to file name, current file size or None
+            """
+            folder = Path(get_cache_dir() / CacheManager._storage_manager_folder / self._context)
+            folder.mkdir(parents=True, exist_ok=True)
+            local_filename = local_filename or self.get_hashed_url_file(remote_url)
+            local_filename = self._conform_filename(local_filename)
+            new_file = folder / local_filename
+            new_file_exists = new_file.exists()
+            if new_file_exists:
+                # noinspection PyBroadException
+                try:
+                    new_file.touch(exist_ok=True)
+                except Exception:
+                    pass
+            # if file doesn't exist, return file size None
+            # noinspection PyBroadException
+            try:
+                new_file_size = new_file.stat().st_size if new_file_exists else None
+            except Exception:
+                new_file_size = None
+
+            if delete_old_files:
+                self.delete_old_files()
+
+            return new_file.as_posix(), new_file_size
+
+        def delete_old_files(self):
+            # type: () -> ()
+            """
+            Delete old files in the cache folder if the cache limit is reached
             """
 
             def safe_time(x):
@@ -182,28 +212,11 @@ class CacheManager(object):
                     pass
                 return atime
 
-            folder = Path(get_cache_dir() / CacheManager._storage_manager_folder / self._context)
-            folder.mkdir(parents=True, exist_ok=True)
-            local_filename = local_filename or self.get_hashed_url_file(remote_url)
-            local_filename = self._conform_filename(local_filename)
-            new_file = folder / local_filename
-            new_file_exists = new_file.exists()
-            if new_file_exists:
-                # noinspection PyBroadException
-                try:
-                    new_file.touch(exist_ok=True)
-                except Exception:
-                    pass
-            # if file doesn't exist, return file size None
-            # noinspection PyBroadException
-            try:
-                new_file_size = new_file.stat().st_size if new_file_exists else None
-            except Exception:
-                new_file_size = None
+            folder = Path(self.get_cache_folder())
 
             folder_files = list(folder.iterdir())
             if len(folder_files) <= self._file_limit:
-                return new_file.as_posix(), new_file_size
+                return
 
             # first exclude lock files
             lock_files = dict()
@@ -269,8 +282,6 @@ class CacheManager(object):
                         os.unlink(f)
                     except BaseException:
                         pass
-
-            return new_file.as_posix(), new_file_size
 
         def lock_cache_folder(self, local_path):
             # type: (Union[str, Path]) -> ()

@@ -27,8 +27,16 @@ class StorageManager(object):
     _file_upload_retries = deferred_config("network.file_upload_retries", 3)
 
     @classmethod
-    def get_local_copy(cls, remote_url, cache_context=None, extract_archive=True, name=None, force_download=False):
-        # type: (str, Optional[str], bool, Optional[str], bool) -> [str, None]
+    def get_local_copy(
+        cls,
+        remote_url,
+        cache_context=None,
+        extract_archive=True,
+        name=None,
+        force_download=False,
+        delete_old_files=True,
+    ):
+        # type: (str, Optional[str], bool, Optional[str], bool, bool) -> [str, None]
         """
         Get a local copy of the remote file. If the remote URL is a direct file access,
         the returned link is the same, otherwise a link to a local copy of the url file is returned.
@@ -43,10 +51,13 @@ class StorageManager(object):
             currently only zip files are supported.
         :param str name: name of the target file
         :param bool force_download: download file from remote even if exists in local cache
+        :param bool delete_old_files: delete old files when cache is full
         :return: Full path to local copy of the requested url. Return None on Error.
         """
         cache = CacheManager.get_cache_manager(cache_context=cache_context)
-        cached_file = cache.get_local_copy(remote_url=remote_url, force_download=force_download)
+        cached_file = cache.get_local_copy(
+            remote_url=remote_url, force_download=force_download, delete_old_files=delete_old_files
+        )
         if extract_archive and cached_file:
             # this will get us the actual cache (even with direct access)
             cache_path_encoding = Path(cache.get_cache_folder()) / cache.get_hashed_url_file(remote_url)
