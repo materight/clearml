@@ -109,6 +109,16 @@ class StorageManager(object):
         ).set_cache_limit(cache_file_limit)
 
     @classmethod
+    def delete_old_cache_files(self, cache_context=None):
+        # type: (Optional[str]) -> ()
+        """
+        If the number of files the cache context holds exceeds the file limit, delete the oldest files.
+        :param str cache_context: Optional cache context identifier, default global context
+        """
+        cache = CacheManager.get_cache_manager(cache_context=cache_context)
+        cache.delete_old_files()
+
+    @classmethod
     def _extract_to_cache(
         cls,
         cached_file,  # type: str
