@@ -164,7 +164,7 @@ class CacheManager(object):
             :param delete_old_files: if True, delete old files in the cache folder if the cache limit is reached
             :return: full path to file name, current file size or None
             """
-            folder = Path(get_cache_dir() / CacheManager._storage_manager_folder / self._context)
+            folder = Path(self.get_cache_folder())
             folder.mkdir(parents=True, exist_ok=True)
             local_filename = local_filename or self.get_hashed_url_file(remote_url)
             local_filename = self._conform_filename(local_filename)
@@ -213,6 +213,8 @@ class CacheManager(object):
                 return atime
 
             folder = Path(self.get_cache_folder())
+            if not folder.exists():
+                return
 
             folder_files = list(folder.iterdir())
             if len(folder_files) <= self._file_limit:
